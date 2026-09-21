@@ -139,12 +139,32 @@ Reports alignment quality (median dt) and drops frames with no nearby truth tick
 paused/loading warm-up period). On the `duel2` capture: 2,383 aligned examples, 94.6% opponent
 coverage, ~16 ms median alignment, 4 rounds.
 
+## Phase 2 — perception (pixels → state vector)
+
+A compact CNN that reads a frame and predicts the opponent's bearing + distance, whether
+they're in view, and your health — the "visual" half of Milestone B.
+
+```bash
+python -m perception.train --session duel2 --epochs 30   # trains on the Phase-1 dataset
+```
+
+- `perception/dataset.py` — extract frames from the video (cached), build targets from the
+  Phase-1 egocentric features; "in view" = opponent within the horizontal cone.
+- `perception/model.py` — small conv backbone + heads (in_view, bearing, dist, health).
+- `perception/train.py` — temporal train/val split, masked losses, denormalized metrics.
+- `perception/infer.py` — `Perceiver.predict(frame)` → state dict (for the live loop).
+
+On the single `duel2` session (val = temporal tail): **93% in-view accuracy, ~7° bearing
+error, ~1.2-block distance MAE, ~2.6 HP health MAE.** Proof the pipeline learns; it will
+**not** generalize to new maps/skins/servers until trained on many more captured duels.
+
 ## Status
 
 - **Milestone A (RL brain):** complete — sim self-play trains a competent sword policy.
 - **Phase 0 (instrumentation):** recorder + ground-truth mod — verified end-to-end on a real duel.
 - **Phase 1 (dataset builder):** complete — validated against `duel2`.
-- **Next:** Phase 2 (perception: pixels → state vector), then Milestone B integration.
+- **Phase 2 (perception):** pipeline + model complete; trained a proof model on `duel2`.
+- **Next:** more captured duels (generalization), Phase 5 (executor), then Milestone B integration.
 
 Perception, executor, and the blue-team detector are described in `docs/DESIGN.md` and not yet
 implemented.
