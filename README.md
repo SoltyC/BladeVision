@@ -121,11 +121,30 @@ see `docs/DESIGN.md` §10.1). Phase 0 builds the data-collection pipeline:
 
 Together they produce the labeled dataset that Phase 2 (perception) trains on.
 
+## Phase 1 — dataset builder
+
+Turns a Phase-0 capture into aligned training examples:
+
+```bash
+python -m dataset.build --session duel2          # auto-selects the overlapping truth file
+```
+
+- `dataset/align.py` — nearest-join frames↔truth on wall-clock; reduce input events to
+  per-frame held-state.
+- `dataset/state.py` — egocentric opponent features (same frame the sim policy consumes).
+- `dataset/rounds.py` — segment rounds (health resets + time gaps) with win/loss outcomes.
+- Output: `data/dataset/<name>/` → `examples.jsonl`, `rounds.json`, `stats.json`.
+
+Reports alignment quality (median dt) and drops frames with no nearby truth tick (e.g. a
+paused/loading warm-up period). On the `duel2` capture: 2,383 aligned examples, 94.6% opponent
+coverage, ~16 ms median alignment, 4 rounds.
+
 ## Status
 
 - **Milestone A (RL brain):** complete — sim self-play trains a competent sword policy.
-- **Phase 0 (instrumentation):** recorder + ground-truth mod scaffolded.
-- **Next:** Phase 1 (dataset build), Phase 2 (perception), then Milestone B integration.
+- **Phase 0 (instrumentation):** recorder + ground-truth mod — verified end-to-end on a real duel.
+- **Phase 1 (dataset builder):** complete — validated against `duel2`.
+- **Next:** Phase 2 (perception: pixels → state vector), then Milestone B integration.
 
 Perception, executor, and the blue-team detector are described in `docs/DESIGN.md` and not yet
 implemented.
