@@ -8,6 +8,7 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.Vec3;
 
@@ -140,7 +141,7 @@ public class BladeVisionClient implements ClientModInitializer {
 		o.addProperty("onGround", p.onGround());
 		o.addProperty("sprinting", p.isSprinting());
 		o.addProperty("hurtTime", p.hurtTime);      // >0 for the ticks after taking a hit
-		o.addProperty("item", p.getMainHandItem().getDescriptionId());
+		o.addProperty("item", BuiltInRegistries.ITEM.getKey(p.getMainHandItem().getItem()).toString());
 		if (isSelf) {
 			o.addProperty("food", p.getFoodData().getFoodLevel());
 		}
