@@ -36,12 +36,16 @@ public class BladeVisionClient implements ClientModInitializer {
 
 	private static final String ENABLE_ENV = "BLADEVISION_LAB";
 	private static final String DIR_ENV = "BLADEVISION_TRUTH_DIR";
+	// GUI launchers (e.g. Modrinth) don't pass shell env vars to the game, so also accept a
+	// JVM system property that can be set in the profile's Java arguments: -Dbladevision.lab=true
+	private static final String ENABLE_PROP = "bladevision.lab";
+	private static final String DIR_PROP = "bladevision.truthDir";
 
 	private BufferedWriter writer;
 
 	@Override
 	public void onInitializeClient() {
-		if (System.getenv(ENABLE_ENV) == null) {
+		if (!labEnabled()) {
 			// Lab gate: do nothing at all unless explicitly enabled.
 			return;
 		}
@@ -50,9 +54,21 @@ public class BladeVisionClient implements ClientModInitializer {
 		ClientLifecycleEvents.CLIENT_STOPPING.register(c -> closeWriter());
 	}
 
+	private static boolean labEnabled() {
+		return System.getenv(ENABLE_ENV) != null || Boolean.getBoolean(ENABLE_PROP);
+	}
+
+	private static String truthDir() {
+		String prop = System.getProperty(DIR_PROP);
+		if (prop != null) {
+			return prop;
+		}
+		return System.getenv(DIR_ENV);
+	}
+
 	private void openWriter() {
 		try {
-			String dir = System.getenv(DIR_ENV);
+			String dir = truthDir();
 			Path base = (dir != null) ? Path.of(dir) : Path.of("bladevision");
 			Files.createDirectories(base);
 			String ts = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));

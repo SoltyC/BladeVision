@@ -74,6 +74,7 @@ class FrameRecorder:
                         "t_perf": time.perf_counter(),
                         "t_wall": time.time(),
                     }) + "\n")
+                    index.flush()  # survive a hard kill; the video writer already flushes
                     self.frames_written += 1
 
                     # Maintain cadence without drift; if we fall behind, resync.

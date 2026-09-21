@@ -36,6 +36,7 @@ class InputRecorder:
         event["t_wall"] = time.time()
         with self._lock:
             self._file.write(json.dumps(event) + "\n")
+            self._file.flush()  # survive a hard kill; input events are low-rate
             self.events_written += 1
 
     # --- keyboard ---------------------------------------------------------
