@@ -1,0 +1,5 @@
+# Milestone A: fast-sim self-play. CPU-only; no CUDA required (works on Apple Silicon MPS/CPU).
+numpy>=1.26
+gymnasium>=0.29
+stable-baselines3>=2.3.0
+torch>=2.2          # SB3 backend; CPU wheels are fine on macOS
