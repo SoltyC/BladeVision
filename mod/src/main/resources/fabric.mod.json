@@ -1,0 +1,24 @@
+{
+	"schemaVersion": 1,
+	"id": "bladevision_truth",
+	"version": "${version}",
+	"name": "BladeVision Ground-Truth",
+	"description": "Lab-only client instrumentation: exports per-tick ground-truth game state (positions, rotations, health, hit registration) for training/evaluating BladeVision perception and detectors. Read-only; never influences the game. Disabled unless BLADEVISION_LAB is set.",
+	"authors": [
+		"sol"
+	],
+	"contact": {},
+	"license": "ARR",
+	"environment": "client",
+	"entrypoints": {
+		"client": [
+			"com.bladevision.client.BladeVisionClient"
+		]
+	},
+	"depends": {
+		"fabricloader": ">=0.19.3",
+		"minecraft": "~26.1",
+		"java": ">=25",
+		"fabric-api": "*"
+	}
+}

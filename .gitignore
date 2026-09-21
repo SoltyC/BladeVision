@@ -11,6 +11,11 @@ runs/
 data/
 *.log
 
+# Gradle / mod build
+mod/build/
+mod/.gradle/
+mod/run/
+
 # OS / editor
 .DS_Store
 .idea/

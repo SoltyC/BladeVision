@@ -105,7 +105,27 @@ python -m policy.duel runs/selfplay/gen_019.zip --vs runs/selfplay/gen_000.zip
 older self-play checkpoints — proving the RL loop, reward design, and self-play league before
 we attach any client, vision, or human-motor executor.
 
+## Phase 0 — instrumentation (in progress)
+
+The gateway to **Milestone B** (a live, no-memory vision bot you can point your anticheat at —
+see `docs/DESIGN.md` §10.1). Phase 0 builds the data-collection pipeline:
+
+- `recorder/` — Python session recorder: screen frames (`video.mp4` + `frames.jsonl`) plus
+  discrete inputs (`input.jsonl`), wall-clock stamped. Run: `python -m recorder.record`
+  (deps: `pip install -r recorder/requirements.txt`; needs macOS Screen-Recording +
+  Input-Monitoring permissions).
+- `mod/` — lab-only Fabric ground-truth mod (MC 26.1.2) that exports per-tick real state
+  (positions, rotations, health, hits) to align with the frames. Rotation/aim ground-truth
+  comes from here, since the OS input hook can't see in-game look while the cursor is grabbed.
+  See `mod/README.md`.
+
+Together they produce the labeled dataset that Phase 2 (perception) trains on.
+
 ## Status
 
-Milestone A scaffolded. Later phases (recorder, Fabric ground-truth mod, perception, executor,
-detector) are described in `docs/DESIGN.md` and not yet implemented.
+- **Milestone A (RL brain):** complete — sim self-play trains a competent sword policy.
+- **Phase 0 (instrumentation):** recorder + ground-truth mod scaffolded.
+- **Next:** Phase 1 (dataset build), Phase 2 (perception), then Milestone B integration.
+
+Perception, executor, and the blue-team detector are described in `docs/DESIGN.md` and not yet
+implemented.

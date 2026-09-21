@@ -1,0 +1,5 @@
+# BladeVision recorder (Phase 0) — screen + input capture. macOS-friendly.
+mss>=9.0            # fast screen capture
+opencv-python>=4.9  # video writing
+numpy>=1.26
+pynput>=1.7         # keyboard + mouse-button hooks

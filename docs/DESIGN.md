@@ -360,11 +360,51 @@ Per 30 Hz step (~33 ms): capture + perception + policy + executor must fit with 
 | **4. Policy (RL fine-tune)** | Port Phase-A self-play onto client/ground-truth env; BC→RL | Beats BC baseline; superhuman signatures logged for §7 |
 | **5. Executor** | Human motor model | Aim/click kinematics pass a human-vs-bot blind stat test at low fidelity |
 | **6. Blue-team** | Detector + fidelity/detectability curve | The §7.3 curve produced and documented |
+| **B. Live vision bot** | End-to-end integration: pixels → action on a real client, run against your anticheat | A no-memory bot completes real duels on your server driven only by vision + synthetic input |
 
-**Milestone A is the current scaffold.** It de-risks the RL loop, the reward design, and the
-self-play league on pure CPU before any Minecraft client or vision work — and it produces a
-benchmark sparring opponent for later phases. Phases 0→2 and 6 remain the highest-value,
-most-defensible work and can proceed in parallel.
+**Milestone A is complete** (the RL brain). Phase 0 is the current work. **Milestone B** is the
+first end-to-end integration and the project's first anticheat-testable artifact — see §10.1.
+
+### 10.1 Milestone B — live vision-to-action bot vs. a real anticheat
+
+**Goal:** a bot that plays a live Minecraft Java client using *only* screen pixels in and
+synthetic mouse/keyboard out — no memory reads, no packet injection — so it can be pointed at
+your anticheat on your own server as a controlled red-team test.
+
+Milestone B is not new theory; it is the **convergence** of existing phases into one real-time
+loop:
+
+```
+   screen frames ──▶ [Perception, Phase 2] ──▶ state vector
+                                                    │
+                                                    ▼
+                                       [Policy, Milestone A / Phase 3-4]
+                                                    │
+                                                    ▼
+   synthetic HID ◀── [Executor, Phase 5] ◀──── action
+        │
+        ▼
+   real Minecraft client on YOUR server ──▶ observed by YOUR anticheat
+```
+
+**Critical path to Milestone B:**
+
+1. **Phase 0 (instrumentation)** — recorder + ground-truth mod. Gateway: perception can't be
+   trained without labeled data, and the mod auto-labels it. *(current work)*
+2. **Phase 2 (perception)** — pixels → state vector. The heaviest lift; the "visual" half.
+3. **Policy** — reuse the Milestone-A brain as the initial decision layer; calibrate / fine-tune
+   for the sim-to-real gap (or BC from real matches, Phase 3).
+4. **Phase 5 (executor)** — action → human-like `CGEvent` mouse/keyboard on the real client.
+5. **Integration** — wire the four into a ~15–30 ms real-time loop; run on your server.
+
+**Reduced-scope early test:** to answer "does my anticheat flag a no-memory vision bot?"
+*before* the RL brain is production-ready, perception + executor + even a simple heuristic
+policy already exercise the anticheat against vision-based control. The RL brain makes the bot
+*strong*; perception + executor make it *real* — and the anticheat mostly scrutinizes the latter
+two. This is the smallest thing that produces a signal for the blue-team work (§7).
+
+**Guardrail:** Milestone B runs on a server you control against your own anticheat — the
+intended controlled red-team. It is not for public servers against non-consenting players (§0).
 
 ---
 
