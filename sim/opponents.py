@@ -15,16 +15,21 @@ import numpy as np
 from .gym_env import OpponentPolicy
 
 # Observation indices (must match encode_obs order in gym_env.py).
-_I_FWD = 0
-_I_RIGHT = 1
 _I_DIST = 2
 _I_SIN_BEARING = 3
 _I_COS_BEARING = 4
 _I_CHARGE = 11
+_I_MY_AIRBORNE = 12
+_I_MY_VY = 13
 
-# Scripted action encodings (indices into ACTION_NVEC factors).
-_MOVE_FWD = 2   # _MOVE_LEVELS[2] == +1
+_ARENA_RADIUS = 12.0  # keep in sync with mechanics.ARENA_RADIUS
+
+# Move-factor indices (into _MOVE_LEVELS = (-1, 0, +1)).
+_MOVE_FWD = 2
 _MOVE_NONE = 1
+_STRAFE_RIGHT = 2
+_STRAFE_LEFT = 0
+# Turn-factor indices (into _TURN_LEVELS).
 _TURN_LEFT = 0
 _TURN_MILD_LEFT = 1
 _TURN_NONE = 2
@@ -32,36 +37,62 @@ _TURN_MILD_RIGHT = 3
 _TURN_RIGHT = 4
 
 
-def scripted_baseline(obs: np.ndarray) -> np.ndarray:
-    """A competent-but-beatable heuristic: face the enemy, close distance, swing in reach.
+def _turn_toward(bearing: float) -> int:
+    """Pick a turn level to reduce the bearing error (bearing 0 == dead ahead)."""
+    if bearing > 0.35:
+        return _TURN_RIGHT
+    if bearing > 0.08:
+        return _TURN_MILD_RIGHT
+    if bearing < -0.35:
+        return _TURN_LEFT
+    if bearing < -0.08:
+        return _TURN_MILD_LEFT
+    return _TURN_NONE
 
-    This is the Phase-A benchmark the RL agent must exceed. It is intentionally simple —
-    no strafing, no crit timing — so a self-play policy has clear room to outclass it.
+
+def scripted_baseline(obs: np.ndarray) -> np.ndarray:
+    """A competent sword duelist — the Phase-A yardstick the RL agent must exceed.
+
+    Pure-sword skills only (no shields): it faces the target, sprints to close, circle-strafes
+    in melee to be a moving target, and **jump-crits** — hopping, then swinging on the way down
+    for 1.5x damage (crits require being airborne, descending, and not sprinting). This gives a
+    genuine skill ceiling to measure against, unlike a stationary punching bag.
     """
-    dist = obs[_I_DIST] * 12.0  # de-normalise (ARENA_RADIUS)
+    dist = obs[_I_DIST] * _ARENA_RADIUS
     bearing = math.atan2(obs[_I_SIN_BEARING], obs[_I_COS_BEARING])
     charge = obs[_I_CHARGE]
+    airborne = obs[_I_MY_AIRBORNE] > 0.5
+    vy = obs[_I_MY_VY]
 
-    # Turn toward the opponent proportional to bearing error.
-    if bearing > 0.35:
-        turn = _TURN_RIGHT
-    elif bearing > 0.08:
-        turn = _TURN_MILD_RIGHT
-    elif bearing < -0.35:
-        turn = _TURN_LEFT
-    elif bearing < -0.08:
-        turn = _TURN_MILD_LEFT
+    turn = _turn_toward(bearing)
+    aligned = abs(bearing) < 0.45
+
+    move_x = _MOVE_NONE
+    move_z = _MOVE_NONE
+    jump = 0
+    sprint = 0
+    attack = 0
+
+    if aligned and dist > 3.3:
+        # Close the gap; sprint from range, strafe a little so approaches aren't straight lines.
+        move_x = _MOVE_FWD
+        sprint = 1 if dist > 4.5 else 0
+        move_z = _STRAFE_RIGHT
+    elif dist <= 3.3:
+        # Melee: circle-strafe and jump-crit when the swing is charged.
+        move_z = _STRAFE_RIGHT
+        if dist > 2.6:
+            move_x = _MOVE_FWD  # stay glued to reach edge
+        if charge > 0.9 and aligned:
+            if not airborne:
+                jump = 1                       # begin crit hop (no sprint -> crit stays valid)
+            elif vy < 0.0:
+                attack = 1                     # swing on the descent = crit
     else:
-        turn = _TURN_NONE
+        # Not aligned yet: turn in place, drift sideways.
+        move_z = _STRAFE_RIGHT
 
-    aligned = abs(bearing) < 0.4
-    in_reach = dist <= 3.1
-
-    move_x = _MOVE_FWD if (not in_reach and aligned) else _MOVE_NONE
-    sprint = 1 if (move_x == _MOVE_FWD and dist > 4.0) else 0
-    attack = 1 if (in_reach and aligned and charge > 0.9) else 0
-
-    return np.array([move_x, _MOVE_NONE, turn, 0, sprint, attack], dtype=np.int64)
+    return np.array([move_x, move_z, turn, jump, sprint, attack], dtype=np.int64)
 
 
 def idle(_obs: np.ndarray) -> np.ndarray:

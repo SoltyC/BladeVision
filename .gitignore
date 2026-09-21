@@ -9,6 +9,7 @@ venv/
 runs/
 *.zip
 data/
+*.log
 
 # OS / editor
 .DS_Store

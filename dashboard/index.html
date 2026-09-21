@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>BladeVision — Training Dashboard</title>
+<style>
+  :root {
+    --bg: #0c0f14; --panel: #141922; --panel-2: #1b2230; --line: #263042;
+    --text: #e6ecf5; --muted: #8b98ad; --accent: #4ea1ff; --accent-2: #ffb454;
+    --good: #43d17a; --bad: #ff5d6c;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text); font-family: var(--sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  header {
+    padding: 20px 28px; border-bottom: 1px solid var(--line);
+    display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap;
+  }
+  h1 { font-size: 18px; margin: 0; letter-spacing: 0.3px; }
+  h1 span { color: var(--accent); }
+  .sub { color: var(--muted); font-size: 13px; }
+  .live { margin-left: auto; font-size: 12px; font-family: var(--mono);
+          display: flex; align-items: center; gap: 7px; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); }
+  .dot.on { background: var(--good); }
+  .dot.stale { background: var(--accent-2); }
+  main { padding: 24px 28px; max-width: 1200px; margin: 0 auto; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; }
+  .card .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.6px; }
+  .card .value { font-size: 26px; font-weight: 650; margin-top: 6px; font-family: var(--mono); }
+  .card .value.small { font-size: 18px; }
+  .charts { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 22px; }
+  @media (max-width: 820px) { .charts { grid-template-columns: 1fr; } }
+  .chart { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px 16px 8px; }
+  .chart h2 { font-size: 13px; margin: 0 0 4px; color: var(--muted); font-weight: 600;
+              text-transform: uppercase; letter-spacing: 0.6px; }
+  .chart .hint { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+  svg { width: 100%; height: 200px; display: block; overflow: visible; }
+  .grid line { stroke: var(--line); stroke-width: 1; }
+  .axis text { fill: var(--muted); font-size: 10px; font-family: var(--mono); }
+  table { width: 100%; border-collapse: collapse; margin-top: 22px; font-family: var(--mono); font-size: 13px; }
+  th, td { text-align: right; padding: 8px 12px; border-bottom: 1px solid var(--line); }
+  th:first-child, td:first-child { text-align: left; }
+  th { color: var(--muted); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+  tbody tr:hover { background: var(--panel-2); }
+  .empty { color: var(--muted); padding: 40px; text-align: center; font-size: 14px; }
+  .pill { font-size: 11px; padding: 2px 8px; border-radius: 20px; background: var(--panel-2);
+          color: var(--muted); border: 1px solid var(--line); }
+</style>
+</head>
+<body>
+  <header>
+    <h1>Blade<span>Vision</span> · self-play trainer</h1>
+    <div class="sub" id="runs-dir">—</div>
+    <div class="live"><span class="dot" id="live-dot"></span><span id="live-text">connecting…</span></div>
+  </header>
+  <main>
+    <div class="cards" id="cards"></div>
+    <div class="charts">
+      <div class="chart">
+        <h2>Win rate vs. scripted baseline</h2>
+        <div class="hint">Fixed yardstick — saturates near 100% once competent.</div>
+        <svg id="chart-baseline"></svg>
+      </div>
+      <div class="chart">
+        <h2>Win rate vs. earliest self (gen 0)</h2>
+        <div class="hint">Non-saturating — the real self-play improvement signal.</div>
+        <svg id="chart-gen0"></svg>
+      </div>
+      <div class="chart">
+        <h2>Seconds per generation</h2>
+        <div class="hint">Training throughput.</div>
+        <svg id="chart-time"></svg>
+      </div>
+      <div class="chart">
+        <h2>Total timesteps</h2>
+        <div class="hint">Cumulative environment steps trained.</div>
+        <svg id="chart-steps"></svg>
+      </div>
+    </div>
+    <table id="table">
+      <thead><tr>
+        <th>Gen</th><th>Mode</th><th>vs baseline</th><th>vs gen0</th>
+        <th>pool</th><th>gen&nbsp;s</th><th>timesteps</th><th>time</th>
+      </tr></thead>
+      <tbody id="tbody"></tbody>
+    </table>
+    <div class="empty" id="empty">Waiting for the first generation to finish…</div>
+  </main>
+
+<script>
+const SVGNS = "http://www.w3.org/2000/svg";
+const fmtInt = n => n == null ? "—" : n.toLocaleString();
+const fmtPct = n => n == null ? "—" : (n * 100).toFixed(0) + "%";
+
+function el(tag, attrs = {}, text) {
+  const e = document.createElementNS(SVGNS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (text != null) e.textContent = text;
+  return e;
+}
+
+// Generic line chart. points: [{x, y}], yMax optional, pct toggles % axis, color.
+function drawLine(svg, points, { color = "#4ea1ff", yMax = null, pct = false } = {}) {
+  svg.innerHTML = "";
+  const W = svg.clientWidth || 500, H = svg.clientHeight || 200;
+  const padL = 42, padR = 12, padT = 12, padB = 22;
+  const valid = points.filter(p => p.y != null);
+  if (valid.length === 0) {
+    svg.appendChild(el("text", { x: W / 2, y: H / 2, "text-anchor": "middle", fill: "#8b98ad", "font-size": 12 }, "no data yet"));
+    return;
+  }
+  const xs = points.map(p => p.x);
+  const xMin = Math.min(...xs), xMax = Math.max(...xs, xMin + 1);
+  const dataMax = yMax != null ? yMax : Math.max(...valid.map(p => p.y)) * 1.1 || 1;
+  const dataMin = 0;
+  const X = x => padL + (W - padL - padR) * (x - xMin) / (xMax - xMin || 1);
+  const Y = y => padT + (H - padT - padB) * (1 - (y - dataMin) / (dataMax - dataMin || 1));
+
+  const grid = el("g", { class: "grid" });
+  const axis = el("g", { class: "axis" });
+  const ticks = 4;
+  for (let i = 0; i <= ticks; i++) {
+    const v = dataMin + (dataMax - dataMin) * i / ticks;
+    const y = Y(v);
+    grid.appendChild(el("line", { x1: padL, y1: y, x2: W - padR, y2: y }));
+    axis.appendChild(el("text", { x: padL - 6, y: y + 3, "text-anchor": "end" },
+      pct ? Math.round(v * 100) + "%" : (v >= 1000 ? (v / 1000).toFixed(0) + "k" : Math.round(v))));
+  }
+  axis.appendChild(el("text", { x: padL, y: H - 6, "text-anchor": "middle" }, xMin));
+  axis.appendChild(el("text", { x: W - padR, y: H - 6, "text-anchor": "end" }, xMax));
+  svg.appendChild(grid); svg.appendChild(axis);
+
+  // Path over valid points (break across nulls).
+  let d = "", pen = false;
+  for (const p of points) {
+    if (p.y == null) { pen = false; continue; }
+    d += (pen ? " L" : " M") + X(p.x) + " " + Y(p.y);
+    pen = true;
+  }
+  svg.appendChild(el("path", { d, fill: "none", stroke: color, "stroke-width": 2.2,
+    "stroke-linejoin": "round", "stroke-linecap": "round" }));
+  for (const p of valid) svg.appendChild(el("circle", { cx: X(p.x), cy: Y(p.y), r: 2.6, fill: color }));
+}
+
+function card(label, value, small) {
+  return `<div class="card"><div class="label">${label}</div>
+          <div class="value${small ? " small" : ""}">${value}</div></div>`;
+}
+
+function render(data) {
+  const hist = data.history || [];
+  const status = data.status || (hist.length ? hist[hist.length - 1] : null);
+  document.getElementById("runs-dir").textContent = data.runs_dir || "";
+
+  // Live indicator: fresh if progress file touched within 4 minutes.
+  const dot = document.getElementById("live-dot"), txt = document.getElementById("live-text");
+  if (data.last_update) {
+    const age = Date.now() / 1000 - data.last_update;
+    if (age < 240) { dot.className = "dot on"; txt.textContent = "training · updated " + Math.round(age) + "s ago"; }
+    else { dot.className = "dot stale"; txt.textContent = "idle · last update " + Math.round(age / 60) + "m ago"; }
+  } else { dot.className = "dot"; txt.textContent = "no run data"; }
+
+  if (!status) { document.getElementById("empty").style.display = "block"; return; }
+  document.getElementById("empty").style.display = "none";
+
+  document.getElementById("cards").innerHTML =
+    card("Generation", status.generation) +
+    card("Mode", `<span class="pill">${status.mode}</span>`, true) +
+    card("Win vs baseline", fmtPct(status.win_rate_vs_baseline)) +
+    card("Win vs gen 0", fmtPct(status.win_rate_vs_gen0)) +
+    card("Timesteps", fmtInt(status.total_timesteps)) +
+    card("Sec / gen", status.gen_seconds != null ? status.gen_seconds + "s" : "—") +
+    card("League pool", status.pool_size) +
+    card("Last update", status.timestamp || "—", true);
+
+  const px = k => hist.map(h => ({ x: h.generation, y: h[k] }));
+  drawLine(document.getElementById("chart-baseline"), px("win_rate_vs_baseline"), { color: "#4ea1ff", yMax: 1, pct: true });
+  drawLine(document.getElementById("chart-gen0"), px("win_rate_vs_gen0"), { color: "#43d17a", yMax: 1, pct: true });
+  drawLine(document.getElementById("chart-time"), px("gen_seconds"), { color: "#ffb454" });
+  drawLine(document.getElementById("chart-steps"), px("total_timesteps"), { color: "#b38bff" });
+
+  const rows = hist.slice(-30).reverse().map(h => `<tr>
+    <td>${h.generation}</td><td>${h.mode}</td>
+    <td>${fmtPct(h.win_rate_vs_baseline)}</td><td>${fmtPct(h.win_rate_vs_gen0)}</td>
+    <td>${h.pool_size}</td><td>${h.gen_seconds ?? "—"}</td>
+    <td>${fmtInt(h.total_timesteps)}</td><td>${h.timestamp ?? "—"}</td></tr>`).join("");
+  document.getElementById("tbody").innerHTML = rows;
+}
+
+async function tick() {
+  try {
+    const r = await fetch("/api/progress", { cache: "no-store" });
+    render(await r.json());
+  } catch (e) {
+    document.getElementById("live-text").textContent = "server unreachable";
+    document.getElementById("live-dot").className = "dot";
+  }
+}
+tick();
+setInterval(tick, 3000);
+window.addEventListener("resize", tick);
+</script>
+</body>
+</html>

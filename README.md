@@ -37,8 +37,11 @@ sim/
   gym_env.py     # single-agent Gymnasium wrapper (opponent = frozen policy)
   opponents.py   # scripted baseline + self-play checkpoint pool (league)
 policy/
-  selfplay.py    # PPO self-play training (Stable-Baselines3)
+  selfplay.py    # PPO self-play training (Stable-Baselines3), resumable daemon
   duel.py        # head-to-head eval between checkpoints
+dashboard/
+  server.py      # stdlib web server exposing /api/progress
+  index.html     # live auto-refreshing training dashboard (charts + table)
 tests/
   test_mechanics.py  # dependency-free sanity checks on the sim
 ```
@@ -60,12 +63,36 @@ python -m pytest tests/ -q          # or: python tests/test_mechanics.py
 ### Train a self-play sword bot
 
 ```bash
-python -m policy.selfplay --generations 20 --steps-per-gen 200000 --out runs/selfplay
+python -m policy.selfplay --generations 20 --steps-per-gen 150000 --out runs/selfplay
 ```
 
-Generations 0–1 warm up against a scripted baseline; later generations play league self-play
-against a rolling pool of frozen past checkpoints. Win rate vs. the baseline is printed each
-generation.
+Warmup generations (default first 3) train against the **scripted duelist baseline** — a
+competent sword bot that circle-strafes and jump-crits. Later generations play league
+self-play against a rolling pool of frozen past checkpoints. No human input is ever required.
+
+**Unattended daemon:** run it hands-off; it checkpoints and logs every generation, so a
+stop/crash loses at most the in-progress one.
+
+```bash
+# run indefinitely in the background; resume later from the newest checkpoint
+nohup python -m policy.selfplay --forever --steps-per-gen 150000 --out runs/selfplay > train.log 2>&1 &
+python -m policy.selfplay --resume --forever --out runs/selfplay   # continue after a stop
+```
+
+Two metrics are logged per generation to `runs/<name>/progress.jsonl` (+ latest in
+`status.json`): **win rate vs. the fixed baseline** (a yardstick that saturates near 100% once
+competent) and **win rate vs. gen 0** (the earliest self — a non-saturating signal of genuine
+self-play improvement).
+
+### Live dashboard
+
+```bash
+python -m dashboard.server --runs runs/selfplay --port 8765
+# open http://127.0.0.1:8765
+```
+
+Auto-refreshing status cards, improvement charts (vs-baseline, vs-gen0, throughput), and a
+recent-generation table. Pure stdlib — no extra dependencies.
 
 ### Evaluate
 
